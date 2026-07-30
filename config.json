@@ -2,6 +2,10 @@
   "lists": [
     { "name": "아직 가보지 못한 카페", "url": "https://naver.me/GvfDBFQX" },
     { "name": "커피 인플루언서 추천 카페", "url": "https://naver.me/GOPkA2jH" },
-    { "name": "가보자 곰 추천 카페", "url": "https://naver.me/5MVmJw5C" }
-  ]
+    { "name": "가보자 곰 추천 카페", "url": "https://naver.me/5MVmJw5C" },
+    { "name": "가본카페", "url": "https://naver.me/FP8OQYlq", "visited": true }
+  ],
+  "notion": {
+    "databaseId": "3ad3ae0b75f581908241dd3d4b12c5a2"
+  }
 }

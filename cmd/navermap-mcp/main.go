@@ -2,34 +2,23 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
+	"github.com/kobums/navermap/internal/config"
 	"github.com/kobums/navermap/internal/naver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const version = "0.1.0"
 
-// Config는 서버가 아는 저장 리스트 목록.
-type Config struct {
-	Lists []ListEntry `json:"lists"`
-}
-
-type ListEntry struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
 type server struct {
 	client *naver.Client
-	config Config
+	config config.Config
 
 	mu      sync.Mutex
 	idCache map[string]string // url -> shareId
@@ -41,13 +30,11 @@ func main() {
 	flag.Parse()
 
 	s := &server{client: naver.NewClient(), idCache: map[string]string{}}
-	if data, err := os.ReadFile(*configPath); err == nil {
-		if err := json.Unmarshal(data, &s.config); err != nil {
-			log.Fatalf("설정 파일 파싱 실패 %s: %v", *configPath, err)
-		}
-	} else if !os.IsNotExist(err) {
-		log.Fatalf("설정 파일 읽기 실패 %s: %v", *configPath, err)
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatal(err)
 	}
+	s.config = cfg
 
 	// 디버그용: navermap-mcp fetch <URL|shareId>
 	if args := flag.Args(); len(args) == 2 && args[0] == "fetch" {
