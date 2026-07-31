@@ -3,7 +3,13 @@
     { "name": "아직 가보지 못한 카페", "url": "https://naver.me/GvfDBFQX" },
     { "name": "커피 인플루언서 추천 카페", "url": "https://naver.me/GOPkA2jH" },
     { "name": "가보자 곰 추천 카페", "url": "https://naver.me/5MVmJw5C" },
-    { "name": "가본카페", "url": "https://naver.me/FP8OQYlq", "visited": true }
+    { "name": "가본카페", "url": "https://naver.me/FP8OQYlq", "visited": true },
+    { "name": "가보고싶은곳", "url": "https://naver.me/x0O9xRnV" },
+    { "name": "가본 식당", "url": "https://naver.me/5ulZWjgv", "visited": true },
+    { "name": "맛집", "url": "https://naver.me/xcAMNdKB" },
+    { "name": "준영의 K리그 맛집리스트", "url": "https://naver.me/5wWyDcpn" },
+    { "name": "번개로드", "url": "https://naver.me/5GpWi0cI" },
+    { "name": "버거맵🍔", "url": "https://naver.me/FW62I4ea" }
   ],
   "notion": {
     "databaseId": "3ad3ae0b75f581908241dd3d4b12c5a2"

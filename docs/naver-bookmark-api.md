@@ -69,13 +69,18 @@ GET https://pages.map.naver.com/save-pages/api/maps-bookmark/v3/shares/{shareId}
 
 ## 3. 확인된 대상 리스트
 
-| 리스트 | 공유 URL | shareId | 폴더명 | 개수 |
+| 리스트 | 공유 URL | shareId | 폴더명 | 개수(추가 시점) |
 |---|---|---|---|---|
 | 아직 가보지 못한 카페 | https://naver.me/GvfDBFQX | b8079a9d428142a4a68175fd5b7c0a8f | 카페 | 227 |
 | 커피 인플루언서 추천 | https://naver.me/GOPkA2jH | 0b5b3fdc66fa405abc8440105d786ad7 | 사냥도감 | 644 |
 | 가보자 곰 추천 | https://naver.me/5MVmJw5C | 863dc82b56c94070879b3cfa2c706b1f | 가보자곰카페 | 422 |
-
-참고: 첫 번째 폴더의 `externalLink`가 "가본 카페" 리스트(https://naver.me/FP8OQYlq)를 가리킴 — 동기화 대상에 추가 후보.
+| 가본카페 (visited) | https://naver.me/FP8OQYlq | 2ed836c5d4b342ea84a53d2a6aed3985 | 가본카페 | 110 |
+| 가보고싶은곳 | https://naver.me/x0O9xRnV | 13102cadd2714851a3e17b6daa808016 | 가보고싶은곳 | 25 |
+| 가본 식당 (visited) | https://naver.me/5ulZWjgv | cae6273084ef49769526a63d12989ac2 | 가본 식당 | 0 |
+| 맛집 | https://naver.me/xcAMNdKB | 17e7cd6792e3418b88ef0528abd6b19f | 맛집 | 183 |
+| 준영의 K리그 맛집리스트 | https://naver.me/5wWyDcpn | dbc19f3e06084549a4d5f569841b62f8 | 준영의 K리그 맛집리스트 | 637 |
+| 번개로드 | https://naver.me/5GpWi0cI | 418d7c4078a84832a072495778193383 | 번개로드 | 404 |
+| 버거맵🍔 | https://naver.me/FW62I4ea | 1649509a58a84433a961d70d5d27776c | 버거맵🍔 | 111 |
 
 ## 4. 운영 메모
 
