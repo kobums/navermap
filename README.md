@@ -75,7 +75,12 @@ cd /data && docker-compose pull navermap-sync
 - 동기화 cron (host crontab, UTC 기준 6시간마다):
   `0 */6 * * * cd /data && /usr/bin/docker-compose run --rm navermap-sync >> /data/navermap/sync.log 2>&1`
 - 리스트 추가는 서버의 `/data/navermap/config.json`에 항목만 추가하면 다음 실행 때 반영 (이미지 재빌드 불필요)
-- `navermap-mcp` HTTP 서비스도 compose에 준비되어 있음(`profiles: [mcp]`) — DNS A 레코드 추가 후 `docker-compose --profile mcp up -d navermap-mcp`
+- **원격 MCP 운영 중**: `https://navermapapi.gowoobro.com` (streamable HTTP, 2026-07-31 기동).
+  다른 기기의 Claude Code에서 쓰려면:
+  `claude mcp add navermap -s user --transport http https://navermapapi.gowoobro.com`
+  재기동은 `cd /data && docker-compose --profile mcp up -d navermap-mcp`.
+  인증 없는 읽기 전용 엔드포인트(원본이 공개 공유 URL이라 민감정보 없음) — 잠그고 싶으면
+  `/data/nginx-htpasswd/navermapapi.gowoobro.com` 파일로 Basic 인증 추가 가능
 
 ## 주의
 
