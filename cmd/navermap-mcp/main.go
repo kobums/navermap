@@ -6,15 +6,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kobums/navermap/internal/config"
 	"github.com/kobums/navermap/internal/naver"
+	"github.com/kobums/navermap/internal/places"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const version = "0.1.0"
+const (
+	version = "0.2.0"
+	// 전체 리스트 병합 결과 캐시 유지 시간. 네이버 조회가 리스트당 수 초라
+	// 코스 설계처럼 툴을 연달아 부를 때 매번 다시 가져오지 않는다.
+	placesCacheTTL = 10 * time.Minute
+)
 
 type server struct {
 	client *naver.Client
@@ -22,6 +31,10 @@ type server struct {
 
 	mu      sync.Mutex
 	idCache map[string]string // url -> shareId
+
+	placesMu    sync.Mutex
+	placesCache map[string]*places.Place
+	placesAt    time.Time
 }
 
 func main() {
@@ -58,6 +71,17 @@ func main() {
 		Name:        "resolve_share",
 		Description: "네이버 지도 공유 URL에서 shareId를 추출하고 폴더 메타데이터를 반환합니다.",
 	}, s.resolveShare)
+	mcp.AddTool(m, &mcp.Tool{
+		Name: "search_places",
+		Description: "설정된 모든 리스트를 병합해 장소를 검색합니다. 데이트 코스 설계의 시작점. " +
+			"query(이름/주소/카테고리/메모 부분일치), region(주소 부분일치, 예: '서울 마포'), " +
+			"unvisitedOnly(안 가본 곳만) 필터를 조합할 수 있습니다.",
+	}, s.searchPlaces)
+	mcp.AddTool(m, &mcp.Tool{
+		Name: "find_nearby",
+		Description: "기준점 주변의 저장된 장소를 가까운 순으로 반환합니다. 코스에서 다음 장소를 고를 때 사용. " +
+			"near에는 장소 이름(저장된 장소), SID, 또는 '위도,경도' 좌표를 넣을 수 있습니다.",
+	}, s.findNearby)
 
 	if *httpAddr != "" {
 		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return m }, nil)
@@ -226,6 +250,234 @@ func (s *server) resolveShare(ctx context.Context, req *mcp.CallToolRequest, arg
 	}
 	fillSummary(&out, &share.Folder)
 	return nil, out, nil
+}
+
+// --- search_places / find_nearby ---
+
+type searchPlacesArgs struct {
+	Query         string `json:"query,omitempty" jsonschema:"이름/주소/카테고리/메모 부분일치"`
+	Region        string `json:"region,omitempty" jsonschema:"주소 부분일치 필터, 예: '서울 마포' '수원'"`
+	Category      string `json:"category,omitempty" jsonschema:"카테고리 이름 부분일치, 예: '카페' '음식점'"`
+	UnvisitedOnly bool   `json:"unvisitedOnly,omitempty" jsonschema:"true면 가본카페 리스트에 없는 곳만"`
+	Limit         int    `json:"limit,omitempty" jsonschema:"기본 20"`
+}
+
+type placeResult struct {
+	SID        string   `json:"sid"`
+	Name       string   `json:"name"`
+	Category   string   `json:"category,omitempty"`
+	Address    string   `json:"address,omitempty"`
+	Lng        float64  `json:"lng"`
+	Lat        float64  `json:"lat"`
+	Memo       string   `json:"memo,omitempty"`
+	Visited    bool     `json:"visited"`
+	Lists      []string `json:"lists"`
+	DistanceKm float64  `json:"distanceKm,omitempty"`
+}
+
+type searchPlacesResult struct {
+	Total    int           `json:"total"`
+	Returned int           `json:"returned"`
+	Places   []placeResult `json:"places"`
+}
+
+func (s *server) searchPlaces(ctx context.Context, req *mcp.CallToolRequest, args searchPlacesArgs) (*mcp.CallToolResult, searchPlacesResult, error) {
+	var out searchPlacesResult
+	all, err := s.allPlaces(ctx)
+	if err != nil {
+		return nil, out, err
+	}
+	q := strings.ToLower(strings.TrimSpace(args.Query))
+	region := strings.ToLower(strings.TrimSpace(args.Region))
+	category := strings.ToLower(strings.TrimSpace(args.Category))
+
+	var hits []*places.Place
+	for _, p := range all {
+		if !p.Available {
+			continue
+		}
+		if args.UnvisitedOnly && p.Visited {
+			continue
+		}
+		if q != "" && !containsAny(q, p.Title(), p.Name, p.Address, p.MCIDName, p.Memo) {
+			continue
+		}
+		if region != "" && !containsAny(region, p.Address) {
+			continue
+		}
+		if category != "" && !containsAny(category, p.MCIDName) {
+			continue
+		}
+		hits = append(hits, p)
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].Title() < hits[j].Title() })
+	out.Total = len(hits)
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit < len(hits) {
+		hits = hits[:limit]
+	}
+	out.Returned = len(hits)
+	out.Places = toResults(hits)
+	return nil, out, nil
+}
+
+type findNearbyArgs struct {
+	Near          string  `json:"near" jsonschema:"기준점: 저장된 장소 이름, SID, 또는 '위도,경도'"`
+	RadiusKm      float64 `json:"radiusKm,omitempty" jsonschema:"반경 km, 기본 1.5"`
+	Category      string  `json:"category,omitempty" jsonschema:"카테고리 이름 부분일치"`
+	UnvisitedOnly bool    `json:"unvisitedOnly,omitempty"`
+	Limit         int     `json:"limit,omitempty" jsonschema:"기본 15"`
+}
+
+type findNearbyResult struct {
+	Center   string        `json:"center" jsonschema:"해석된 기준점"`
+	Total    int           `json:"total"`
+	Returned int           `json:"returned"`
+	Places   []placeResult `json:"places"`
+}
+
+func (s *server) findNearby(ctx context.Context, req *mcp.CallToolRequest, args findNearbyArgs) (*mcp.CallToolResult, findNearbyResult, error) {
+	var out findNearbyResult
+	all, err := s.allPlaces(ctx)
+	if err != nil {
+		return nil, out, err
+	}
+	lat, lng, centerName, centerSID, err := resolveCenter(all, args.Near)
+	if err != nil {
+		return nil, out, err
+	}
+	out.Center = centerName
+
+	radius := args.RadiusKm
+	if radius <= 0 {
+		radius = 1.5
+	}
+	category := strings.ToLower(strings.TrimSpace(args.Category))
+
+	var hits []*places.Place
+	dist := map[string]float64{}
+	for _, p := range all {
+		if !p.Available || p.SID == centerSID {
+			continue
+		}
+		if args.UnvisitedOnly && p.Visited {
+			continue
+		}
+		if category != "" && !containsAny(category, p.MCIDName) {
+			continue
+		}
+		d := places.DistanceKm(lat, lng, p.Py, p.Px)
+		if d > radius {
+			continue
+		}
+		dist[p.SID] = d
+		hits = append(hits, p)
+	}
+	sort.Slice(hits, func(i, j int) bool { return dist[hits[i].SID] < dist[hits[j].SID] })
+	out.Total = len(hits)
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 15
+	}
+	if limit < len(hits) {
+		hits = hits[:limit]
+	}
+	out.Returned = len(hits)
+	out.Places = toResults(hits)
+	for i := range out.Places {
+		out.Places[i].DistanceKm = round2(dist[out.Places[i].SID])
+	}
+	return nil, out, nil
+}
+
+// resolveCenter는 '위도,경도' 좌표, SID, 장소 이름(완전 일치 우선, 부분 일치 차선)
+// 순서로 기준점을 해석한다.
+func resolveCenter(all map[string]*places.Place, near string) (lat, lng float64, name, sid string, err error) {
+	near = strings.TrimSpace(near)
+	if la, ln, ok := parseLatLng(near); ok {
+		return la, ln, near, "", nil
+	}
+	if p, ok := all[near]; ok {
+		return p.Py, p.Px, p.Title(), p.SID, nil
+	}
+	lower := strings.ToLower(near)
+	var partial *places.Place
+	for _, p := range all {
+		title := strings.ToLower(p.Title())
+		if title == lower || strings.ToLower(p.Name) == lower {
+			return p.Py, p.Px, p.Title(), p.SID, nil
+		}
+		if partial == nil && strings.Contains(title, lower) {
+			partial = p
+		}
+	}
+	if partial != nil {
+		return partial.Py, partial.Px, partial.Title(), partial.SID, nil
+	}
+	return 0, 0, "", "", fmt.Errorf("기준점을 찾을 수 없음: %q (저장된 장소 이름, SID, 또는 '위도,경도')", near)
+}
+
+func parseLatLng(s string) (lat, lng float64, ok bool) {
+	a, b, found := strings.Cut(s, ",")
+	if !found {
+		return 0, 0, false
+	}
+	lat, err1 := strconv.ParseFloat(strings.TrimSpace(a), 64)
+	lng, err2 := strconv.ParseFloat(strings.TrimSpace(b), 64)
+	if err1 != nil || err2 != nil || lat < 33 || lat > 39 || lng < 124 || lng > 132 {
+		return 0, 0, false
+	}
+	return lat, lng, true
+}
+
+func toResults(hits []*places.Place) []placeResult {
+	results := make([]placeResult, len(hits))
+	for i, p := range hits {
+		results[i] = placeResult{
+			SID:      p.SID,
+			Name:     p.Title(),
+			Category: p.MCIDName,
+			Address:  p.Address,
+			Lng:      p.Px,
+			Lat:      p.Py,
+			Memo:     p.Memo,
+			Visited:  p.Visited,
+			Lists:    p.Lists,
+		}
+	}
+	return results
+}
+
+func containsAny(needle string, haystacks ...string) bool {
+	for _, h := range haystacks {
+		if strings.Contains(strings.ToLower(h), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func round2(f float64) float64 {
+	return float64(int(f*100+0.5)) / 100
+}
+
+// allPlaces는 설정된 모든 리스트를 병합해 돌려준다. TTL 캐시.
+func (s *server) allPlaces(ctx context.Context) (map[string]*places.Place, error) {
+	s.placesMu.Lock()
+	defer s.placesMu.Unlock()
+	if s.placesCache != nil && time.Since(s.placesAt) < placesCacheTTL {
+		return s.placesCache, nil
+	}
+	all, err := places.FetchAll(ctx, s.client, s.config.Lists)
+	if err != nil {
+		return nil, err
+	}
+	s.placesCache = all
+	s.placesAt = time.Now()
+	return all, nil
 }
 
 // --- helpers ---

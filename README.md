@@ -34,8 +34,22 @@ streamable HTTP (서버 상시 배포용):
 | 툴 | 설명 |
 |---|---|
 | `list_folders` | config.json에 등록된 리스트 전체의 메타데이터 |
-| `get_bookmarks` | 리스트의 장소 목록. `list`에 리스트 이름/공유 URL/shareId, `query` 부분일치 필터, `offset`/`limit`, `full`(원본 필드 전체) 지원 |
+| `get_bookmarks` | 리스트 하나의 장소 목록. `list`에 리스트 이름/공유 URL/shareId, `query` 부분일치 필터, `offset`/`limit`, `full`(원본 필드 전체) 지원 |
+| `search_places` | **모든 리스트 병합 검색** — `query`, `region`(주소 부분일치), `category`, `unvisitedOnly` 필터. 폐업 장소 자동 제외 |
+| `find_nearby` | 기준점(`near`: 장소 이름/SID/`위도,경도`) 주변 장소를 가까운 순으로. `radiusKm`(기본 1.5), `category`, `unvisitedOnly` |
 | `resolve_share` | 공유 URL → shareId + 폴더 메타데이터 |
+
+전체 리스트 병합 결과는 서버 프로세스 안에서 10분간 캐시된다 (연속 호출 시 네이버 재조회 없음).
+
+## 데이트 코스 짜기
+
+MCP가 등록된 Claude에게 이렇게 부탁하면 된다:
+
+> 이번 주말에 수원 행궁동 쪽에서 데이트할 건데, 안 가본 카페 위주로 코스 짜줘
+
+Claude가 하는 일: `search_places(region="수원", unvisitedOnly=true)` → 앵커 장소 선택 →
+`find_nearby(near="<앵커>", category="음식점")` 등으로 도보 거리 안의 식사/카페/디저트 조합 →
+동선 순서로 정리. 장소마다 `sid`가 있으므로 `https://map.naver.com/p/entry/place/<sid>` 링크로 확인 가능.
 
 ## config.json
 
