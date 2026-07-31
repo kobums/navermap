@@ -47,6 +47,22 @@ streamable HTTP (서버 상시 배포용):
 }
 ```
 
+## 서버 배포 (gowoobro.com)
+
+이미지는 Docker Hub `kobums/navermap` (sync/mcp 바이너리 동봉). 배포 흐름:
+
+```sh
+make push                        # 맥에서 amd64 이미지 빌드 & 푸시
+ssh root@140.82.12.99            # 서버에서
+cd /data && docker-compose pull navermap-sync
+```
+
+- 서버 설정: `/data/navermap/.env` (NOTION_TOKEN), `/data/navermap/config.json` (리스트 목록)
+- 동기화 cron (host crontab, UTC 기준 6시간마다):
+  `0 */6 * * * cd /data && /usr/bin/docker-compose run --rm navermap-sync >> /data/navermap/sync.log 2>&1`
+- 리스트 추가는 서버의 `/data/navermap/config.json`에 항목만 추가하면 다음 실행 때 반영 (이미지 재빌드 불필요)
+- `navermap-mcp` HTTP 서비스도 compose에 준비되어 있음(`profiles: [mcp]`) — DNS A 레코드 추가 후 `docker-compose --profile mcp up -d navermap-mcp`
+
 ## 주의
 
 내부 API라 예고 없이 바뀔 수 있다. 클라이언트에 재시도(3회, 지수 백오프)가 들어있지만,
