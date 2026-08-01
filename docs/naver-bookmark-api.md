@@ -81,6 +81,7 @@ GET https://pages.map.naver.com/save-pages/api/maps-bookmark/v3/shares/{shareId}
 | 준영의 K리그 맛집리스트 | https://naver.me/5wWyDcpn | dbc19f3e06084549a4d5f569841b62f8 | 준영의 K리그 맛집리스트 | 637 |
 | 번개로드 | https://naver.me/5GpWi0cI | 418d7c4078a84832a072495778193383 | 번개로드 | 404 |
 | 버거맵🍔 | https://naver.me/FW62I4ea | 1649509a58a84433a961d70d5d27776c | 버거맵🍔 | 111 |
+| 여자친구 맛집 | https://naver.me/5nhAxoZs | 463d5609231d45009c0419aa1278bf06 | 맛집 | 260 |
 
 ## 4. 운영 메모
 
