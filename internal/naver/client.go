@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -39,6 +41,12 @@ func (c *Client) ResolveShareID(ctx context.Context, urlOrID string) (string, er
 		return m, nil
 	}
 
+	// MCP 툴 입력으로 임의 URL이 들어오므로, 서버가 내부망 등 임의 주소로 요청하지 않도록(SSRF)
+	// 네이버 공유 도메인만 허용한다.
+	if !isNaverShareURL(urlOrID) {
+		return "", fmt.Errorf("지원하지 않는 공유 URL: naver.me 또는 naver.com 주소만 허용됩니다")
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlOrID, nil)
 	if err != nil {
 		return "", fmt.Errorf("공유 URL 파싱 실패: %w", err)
@@ -62,6 +70,16 @@ func (c *Client) ResolveShareID(ctx context.Context, urlOrID string) (string, er
 		return m, nil
 	}
 	return "", fmt.Errorf("리다이렉트에서 shareId를 찾지 못함 (status=%d, location=%q)", resp.StatusCode, loc)
+}
+
+// isNaverShareURL은 http(s) 스킴이고 호스트가 naver.me 또는 naver.com(서브도메인 포함)인지 확인한다.
+func isNaverShareURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "naver.me" || host == "naver.com" || strings.HasSuffix(host, ".naver.com")
 }
 
 // GetShare는 폴더 메타데이터를 가져온다. bookmarkList 앞부분도 딸려오지만

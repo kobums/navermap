@@ -84,8 +84,11 @@ func main() {
 	}, s.findNearby)
 
 	if *httpAddr != "" {
-		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return m }, nil)
-		log.Printf("navermap MCP 서버 시작: http://%s/ (lists=%d)", *httpAddr, len(s.config.Lists))
+		handler, authEnabled, err := basicAuthFromEnv(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return m }, nil))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("navermap MCP 서버 시작: http://%s/ (lists=%d, basicAuth=%v)", *httpAddr, len(s.config.Lists), authEnabled)
 		log.Fatal(http.ListenAndServe(*httpAddr, handler))
 	}
 	if err := m.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
