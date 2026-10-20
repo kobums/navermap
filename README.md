@@ -29,6 +29,14 @@ streamable HTTP (서버 상시 배포용):
 ./navermap-mcp -http :8787 -config config.json
 ```
 
+환경 변수 `MCP_BASIC_USER` / `MCP_BASIC_PASS`를 둘 다 설정하면 HTTP 모드에 Basic 인증이 켜진다
+(둘 다 비우면 인증 없음, 하나만 설정하면 기동 실패). 클라이언트 등록 시 헤더를 함께 준다:
+
+```sh
+claude mcp add navermap -s user --transport http https://navermapapi.gowoobro.com \
+  --header "Authorization: Basic $(printf '%s:%s' "$MCP_BASIC_USER" "$MCP_BASIC_PASS" | base64)"
+```
+
 ## 툴
 
 | 툴 | 설명 |
@@ -37,7 +45,7 @@ streamable HTTP (서버 상시 배포용):
 | `get_bookmarks` | 리스트 하나의 장소 목록. `list`에 리스트 이름/공유 URL/shareId, `query` 부분일치 필터, `offset`/`limit`, `full`(원본 필드 전체) 지원 |
 | `search_places` | **모든 리스트 병합 검색** — `query`, `region`(주소 부분일치), `category`, `unvisitedOnly` 필터. 폐업 장소 자동 제외 |
 | `find_nearby` | 기준점(`near`: 장소 이름/SID/`위도,경도`) 주변 장소를 가까운 순으로. `radiusKm`(기본 1.5), `category`, `unvisitedOnly` |
-| `resolve_share` | 공유 URL → shareId + 폴더 메타데이터 |
+| `resolve_share` | 공유 URL(`naver.me` / `naver.com` 도메인만 허용) 또는 shareId → shareId + 폴더 메타데이터 |
 
 전체 리스트 병합 결과는 서버 프로세스 안에서 10분간 캐시된다 (연속 호출 시 네이버 재조회 없음).
 
@@ -79,8 +87,10 @@ cd /data && docker-compose pull navermap-sync
   다른 기기의 Claude Code에서 쓰려면:
   `claude mcp add navermap -s user --transport http https://navermapapi.gowoobro.com`
   재기동은 `cd /data && docker-compose --profile mcp up -d navermap-mcp`.
-  인증 없는 읽기 전용 엔드포인트(원본이 공개 공유 URL이라 민감정보 없음) — 잠그고 싶으면
-  `/data/nginx-htpasswd/navermapapi.gowoobro.com` 파일로 Basic 인증 추가 가능
+  읽기 전용 엔드포인트(원본이 공개 공유 URL이라 민감정보 없음). 잠그려면 `/data/navermap/.env`에
+  `MCP_BASIC_USER` / `MCP_BASIC_PASS`를 넣고(compose의 navermap-mcp 서비스가 그 env_file을 읽는지 확인)
+  재기동하면 앱 자체 Basic 인증이 켜진다. nginx 쪽 `/data/nginx-htpasswd/navermapapi.gowoobro.com`
+  파일로 프록시에서 Basic 인증을 거는 방법도 있다 (둘 중 하나만 쓸 것 — 둘 다 켜면 같은 헤더를 두 번 검사).
 
 ## 주의
 
